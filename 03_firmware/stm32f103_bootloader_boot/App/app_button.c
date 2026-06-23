@@ -1,0 +1,188 @@
+/*  Copyright (c) 2026 TimTan
+ *  All rights reserved
+ *
+ *  File name: app_button.c
+ *  Description: Application layer - button press detection state machine
+ *               One complete press + release = one valid key event.
+ *
+ *  Revision history     Version       Author        Description
+ *--------------------------------------------------
+ *  2026.6.20            v01           TimTan        Create file
+ *--------------------------------------------------
+*/
+
+#include "app_button.h"
+#include "bsp_gpio.h"
+
+/*==============================================================================
+ * Local Constants
+ *============================================================================*/
+
+/* Debounce threshold: scan() is expected to be called every 10ms,
+ * so threshold of 3 gives ~30ms debounce time */
+#define APP_BUTTON_DEBOUNCE_THRESHOLD   3U
+
+/*==============================================================================
+ * Local Variables
+ *============================================================================*/
+static app_button_t g_button_left;
+static app_button_t g_button_right;
+
+/*==============================================================================
+ *  Function: void app_button_init(void)
+ *  Input:  none
+ *  Output: none
+ *  Return: none
+ *  Description: Initialize button state machines.
+ *               Call once during system initialization.
+ *============================================================================*/
+void app_button_init(void)
+{
+    /* Initialize KEY_LEFT state machine */
+    g_button_left.state        = APP_BUTTON_STATE_IDLE;
+    g_button_left.debounce_cnt = 0;
+    g_button_left.event_flag   = 0;
+
+    /* Initialize KEY_RIGHT state machine */
+    g_button_right.state        = APP_BUTTON_STATE_IDLE;
+    g_button_right.debounce_cnt = 0;
+    g_button_right.event_flag   = 0;
+}
+
+/*==============================================================================
+ *  Function: static void app_button_fsm(app_button_t *p_btn, uint8_t key_level)
+ *  Input:  p_btn     - pointer to button instance
+ *          key_level - current GPIO read level (0 = pressed, 1 = released)
+ *  Output: none
+ *  Return: none
+ *  Description: Run the button state machine for one cycle.
+ *
+ *  State diagram:
+ *                                      +-- key=1 ---> IDLE
+ *                                      |
+ *    IDLE -- key=0 --> PRESS_DEBOUNCE -+
+ *                                      |
+ *                                      +-- key=0, cnt>=thr --> PRESSED
+ *
+ *    PRESSED -- key=1 --> RELEASE_DEBOUNCE -- key=1, cnt>=thr --> IDLE
+ *                  |                         |                    (set event)
+ *                  +-- key=0 (stay)          +-- key=0 --> PRESSED
+ *============================================================================*/
+static void app_button_fsm(app_button_t *p_btn, uint8_t key_level)
+{
+    switch (p_btn->state)
+    {
+    case APP_BUTTON_STATE_IDLE:
+        if (key_level == 0U)
+        {
+            p_btn->state        = APP_BUTTON_STATE_PRESS_DEBOUNCE;
+            p_btn->debounce_cnt = 0;
+        }
+        break;
+
+    case APP_BUTTON_STATE_PRESS_DEBOUNCE:
+        if (key_level == 0U)
+        {
+            p_btn->debounce_cnt++;
+            if (p_btn->debounce_cnt >= APP_BUTTON_DEBOUNCE_THRESHOLD)
+            {
+                p_btn->state = APP_BUTTON_STATE_PRESSED;
+            }
+        }
+        else
+        {
+            /* Glitch - back to idle */
+            p_btn->state = APP_BUTTON_STATE_IDLE;
+        }
+        break;
+
+    case APP_BUTTON_STATE_PRESSED:
+        if (key_level == 1U)
+        {
+            p_btn->state        = APP_BUTTON_STATE_RELEASE_DEBOUNCE;
+            p_btn->debounce_cnt = 0;
+        }
+        break;
+
+    case APP_BUTTON_STATE_RELEASE_DEBOUNCE:
+        if (key_level == 1U)
+        {
+            p_btn->debounce_cnt++;
+            if (p_btn->debounce_cnt >= APP_BUTTON_DEBOUNCE_THRESHOLD)
+            {
+                p_btn->state      = APP_BUTTON_STATE_IDLE;
+                p_btn->event_flag = 1;  /* Valid press+release cycle detected */
+            }
+        }
+        else
+        {
+            /* Glitch - back to pressed */
+            p_btn->state = APP_BUTTON_STATE_PRESSED;
+        }
+        break;
+
+    default:
+        p_btn->state = APP_BUTTON_STATE_IDLE;
+        break;
+    }
+}
+
+/*==============================================================================
+ *  Function: void app_button_scan(void)
+ *  Input:  none
+ *  Output: none
+ *  Return: none
+ *  Description: Scan all buttons and run their state machines.
+ *               Call periodically (recommended every 10ms) from main loop
+ *               or timer interrupt.
+ *============================================================================*/
+void app_button_scan(void)
+{
+    uint8_t key_left_level;
+    uint8_t key_right_level;
+    
+
+    /* Read current key levels */
+    key_left_level  = bsp_key_left_read();
+    key_right_level = bsp_key_right_read();
+
+    /* Run state machines */
+    app_button_fsm(&g_button_left,  key_left_level);
+    app_button_fsm(&g_button_right, key_right_level);
+}
+
+/*==============================================================================
+ *  Function: uint8_t app_button_get_key_left(void)
+ *  Input:  none
+ *  Return: 1 = valid event detected (press+release cycle completed),
+ *          0 = no event
+ *  Description: Check and clear the KEY_LEFT event flag.
+ *               Returns 1 if a complete press+release was detected,
+ *               automatically clears on read.
+ *============================================================================*/
+uint8_t app_button_get_key_left(void)
+{
+    uint8_t ret;
+
+    ret = g_button_left.event_flag;
+    g_button_left.event_flag = 0;
+    return ret;
+}
+
+/*==============================================================================
+ *  Function: uint8_t app_button_get_key_right(void)
+ *  Input:  none
+ *  Return: 1 = valid event detected (press+release cycle completed),
+ *          0 = no event
+ *  Description: Check and clear the KEY_RIGHT event flag.
+ *               Returns 1 if a complete press+release was detected,
+ *               automatically clears on read.
+ *============================================================================*/
+uint8_t app_button_get_key_right(void)
+{
+    uint8_t ret;
+
+    ret = g_button_right.event_flag;
+    g_button_right.event_flag = 0;
+    return ret;
+}

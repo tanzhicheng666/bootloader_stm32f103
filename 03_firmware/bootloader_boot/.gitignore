@@ -1,0 +1,21 @@
+# Keil build outputs
+project/Objects/
+project/Listings/
+project/DebugConfig/
+*.uvguix.*
+*.dep
+*.crf
+*.d
+*.o
+*.axf
+*.hex
+*.bin
+*.htm
+*.lnp
+*.lst
+*.map
+*.iex
+*.scr
+*.plg
+*.bak
+*.sct

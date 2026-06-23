@@ -1,0 +1,38 @@
+# Keil build outputs
+*.uvguix.*
+*.uvgui.*
+*.dep
+*.crf
+*.d
+*.o
+*.axf
+*.hex
+*.bin
+*.htm
+*.lnp
+*.lst
+*.map
+*.iex
+*.scr
+*.plg
+*.bak
+*.sct
+Objects/
+Listings/
+DebugConfig/
+JLinkLog.txt
+EventRecorderStub.scvd
+
+# IDE
+*.suo
+*.user
+.vs/
+bin/
+obj/
+
+# OS
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.tmp
